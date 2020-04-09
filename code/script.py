@@ -48,21 +48,27 @@ from class_partitioning import Partition
 def elevation_images(points, pw=0.2):
     pxmin, pxmax = np.min(points[:,0]), np.max(points[:,0])
     pymin, pymax = np.min(points[:,1]), np.max(points[:,1])
-    pzmin, pzmax = np.min(points[:,2]), np.max(points[:,2]) 
+    pzmin, pzmax = np.min(points[:,2]), np.max(points[:,2])
     points -= np.array([pxmin, pymin, pzmin])
-    
+
     h, w = int( (pxmax-pxmin)/pw ) + 1, int( (pymax-pymin)/pw ) + 1
     max_elevation, min_elevation = np.zeros((h,w)), (pzmax-pzmin)*np.ones((h,w))
     accumulation = np.zeros((h,w))
-    
+
     for p in points:
         x, y = int(p[0]/pw), int(p[1]/pw)
         max_elevation[x,y] = max(p[2], max_elevation[x,y])
-        min_elevation[x,y] = max(p[2], min_elevation[x,y])
+        min_elevation[x,y] = min(p[2], min_elevation[x,y])
         accumulation[x,y] += 1
+
+    for i in range(len(min_elevation)):
+        for j in range(len(min_elevation[0])):
+            if min_elevation[i, j] == pzmax - pzmin:
+                min_elevation[i, j] = 0
+
     height_difference = max_elevation - min_elevation
     return max_elevation, min_elevation, height_difference, accumulation
-    
+
 
 def compute_zmin(points, pw=0.2):
     pxmin, pxmax = np.min(points[:, 0]), np.max(points[:, 0])
@@ -84,28 +90,25 @@ def compute_zmin(points, pw=0.2):
     height_diff_img = max_elevation_img - min_elevation_img
     return max_elevation_img, min_elevation_img, height_diff_img, accumulation_img
 
-def compute_lambda_flat_zones(image, lambd):
-    partition = Partition(image)
+def compute_lambda_flat_zones(image, accumulation, lambd):
+    partition = Partition(accumulation>0)
     neighbours_shift = [(1,0), (0,1), (-1,0), (0,-1)]
     nrow, ncol = image.shape[0], image.shape[1]
-    
+
     for i in range(nrow):
         for j in range(ncol):
-            for shift in neighbours_shift:
-                x, y = i + shift[0], j+shift[1]
-                if(x>=0 and y>=0 and x<nrow and y<ncol and np.abs(image[i,j]-image[x,y])<=lambd):
-                    partition.merge_classes((i,j), (x,y))
+            if(partition.image[i,j]):
+                for shift in neighbours_shift:
+                    x, y = i + shift[0], j+shift[1]
+                    if(x>=0 and y>=0 and x<nrow and y<ncol and partition.image[x,y] and np.abs(image[i,j]-image[x,y])<=lambd):
+                        partition.merge_classes((i,j), (x,y))
     return partition.get_all_classes()
 
 def segment_ground(image, accumulation):
-    zones = compute_lambda_flat_zones(image, 0.2)
-    argmax = 0
-    lengths = [-len(zones[i]) for i in range(len(zones))]
+    zones = compute_lambda_flat_zones(image, accumulation, 0.2)
+    lengths = [len(zones[i]) for i in range(len(zones))]
     args = np.argsort(lengths)
-    arg = 0
-    while accumulation[zones[args[arg]][0]] <= 0:
-        arg += 1
-    return zones[args[arg]]
+    return zones[args[-1]]
 
 def show_ground(image, accumulation):
     result0 = np.zeros(image.shape)
@@ -113,7 +116,7 @@ def show_ground(image, accumulation):
     for pixel in ground0:
         result0[pixel] = image[pixel]
     return result0
-    
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -145,12 +148,16 @@ if __name__ == '__main__':
     points = np.vstack((data['x'], data['y'], data['z'])).T
     N = len(points)
 
+    t0 = time.time()
     max_elevation, min_elevation, height_difference, accumulation = elevation_images(points)
-    print("Elevation images computed.")
+    t1 = time.time()
+    print("Elevation images computed in ", t1-t0 ," seconds.")
     plt.imshow(max_elevation)
     plt.show()
+    t0 = time.time()
     ground0 = show_ground(max_elevation, accumulation)
-    print("Ground segmented.")
+    t1 = time.time()
+    print("Ground segmented in ", t1-t0, " seconds.")
     plt.imshow(ground0)
     plt.show()
     '''

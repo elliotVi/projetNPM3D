@@ -9,24 +9,28 @@ import numpy as np
 class Partition:
     
     def __init__(self, image):
+        # The boolean matrix that indicates which pixels to partition
         self.image = image
         
         # Gives a different class to each pixel by default
         pixels = np.zeros(image.shape)
         for i in range(image.shape[0]):
             for j in range(image.shape[1]):
-                pixels[i,j] = i*image.shape[1] + j
+                if image[i,j]:
+                    pixels[i,j] = i*image.shape[1] + j
         self.pixels = pixels
         
         # Creates a class for each pixel by default
         classes = {}
         for i in range(image.shape[0]):
             for j in range(image.shape[1]):
-                classes[i*image.shape[1] + j] = [ (i,j) ]
+                if image[i,j]:
+                    classes[i*image.shape[1] + j] = [ (i,j) ]
         self.classes = classes
         
     def get_key(self, pixel):
-        return self.pixels[pixel]
+        if self.image[pixel]:
+            return self.pixels[pixel]
     
     def merge_classes(self, pixel1, pixel2):
         # Takes the coordinates of two pixels as tuples, and merges two classes by adding the elements of the smaller one to the other
